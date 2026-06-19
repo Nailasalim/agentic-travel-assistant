@@ -22,6 +22,7 @@ import streamlit as st
 from data.destinations import SUPPORTED_DESTINATIONS
 
 DEFAULT_API_URL = os.getenv("TRAVEL_API_URL", "http://127.0.0.1:8000")
+LOGO_PATH = Path(__file__).resolve().parent / "assets" / "daybyday_logo.png"
 
 STAY_PREFERENCES = [
     "Any",
@@ -42,10 +43,14 @@ def init_session_state() -> None:
         "trip_result": None,
         "error_message": None,
         "selected_stay": None,
+        "previous_trips": [],
+        "viewing_archived": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+    if "destination_input" not in st.session_state:
+        st.session_state.destination_input = "Goa"
 
 
 def api_post(path: str, payload: dict, api_url: str) -> dict[str, Any]:
@@ -83,7 +88,112 @@ def handle_stale_session(message: str) -> None:
     st.session_state.trip_result = None
     st.session_state.last_response = None
     st.session_state.selected_stay = None
+    st.session_state.viewing_archived = False
     st.session_state.error_message = message
+
+
+def _status_label(status: str) -> str:
+    return {
+        "awaiting_approval": "Awaiting approval",
+        "completed": "Completed",
+        "rejected": "Rejected",
+        "budget_infeasible": "Budget issue",
+        "error": "Error",
+    }.get(status, "Planning")
+
+
+def _archive_current_trip_if_done() -> None:
+    """Move a finished trip into previous_trips before starting a new one."""
+    status = st.session_state.trip_status
+    if status not in ("completed", "rejected"):
+        return
+
+    result = st.session_state.trip_result or {}
+    thread_id = st.session_state.thread_id or f"archived_{uuid.uuid4().hex[:8]}"
+    trips = st.session_state.previous_trips
+
+    if any(t.get("id") == thread_id for t in trips):
+        return
+
+    entry = {
+        "id": thread_id,
+        "destination": result.get("destination", "Trip"),
+        "days": result.get("days", "—"),
+        "travelers": result.get("travelers", "—"),
+        "rooms_required": result.get("rooms_required", "—"),
+        "budget": result.get("budget", 0),
+        "status": status,
+        "trip_result": result,
+    }
+    st.session_state.previous_trips = [entry] + trips[:9]
+
+
+def _load_archived_trip(trip_id: str) -> None:
+    _archive_current_trip_if_done()
+    for trip in st.session_state.previous_trips:
+        if trip.get("id") == trip_id:
+            st.session_state.thread_id = None
+            st.session_state.trip_status = trip.get("status", "completed")
+            st.session_state.trip_result = trip.get("trip_result")
+            st.session_state.approval_payload = None
+            st.session_state.last_response = None
+            st.session_state.selected_stay = None
+            st.session_state.error_message = None
+            st.session_state.viewing_archived = True
+            hotels = (trip.get("trip_result") or {}).get("hotels", {})
+            st.session_state.selected_stay = hotels.get("selected_hotel")
+            return
+
+
+def _sidebar_trip_snapshot() -> dict[str, Any] | None:
+    status = st.session_state.trip_status
+    if status == "idle" and not st.session_state.thread_id:
+        return None
+
+    result = st.session_state.trip_result or {}
+    payload = st.session_state.approval_payload or {}
+    last = st.session_state.last_response or {}
+
+    if status == "awaiting_approval":
+        summary = payload.get("trip_summary") or {}
+        return {
+            "destination": summary.get("destination") or payload.get("destination", "—"),
+            "days": summary.get("days") or payload.get("days", "—"),
+            "travelers": summary.get("travelers") or payload.get("travelers", "—"),
+            "rooms": summary.get("rooms_required") or payload.get("rooms_required", "—"),
+            "budget": summary.get("budget") or payload.get("budget", 0),
+            "status": status,
+        }
+
+    if status == "budget_infeasible":
+        err = last.get("budget_error") or {}
+        return {
+            "destination": err.get("destination", "—"),
+            "days": err.get("days", "—"),
+            "travelers": err.get("travelers", "—"),
+            "rooms": err.get("rooms_required", "—"),
+            "budget": err.get("user_budget", 0),
+            "status": status,
+        }
+
+    if result:
+        return {
+            "destination": result.get("destination", "—"),
+            "days": result.get("days", "—"),
+            "travelers": result.get("travelers", "—"),
+            "rooms": result.get("rooms_required", "—"),
+            "budget": result.get("budget", 0),
+            "status": status,
+        }
+
+    return None
+
+
+def _fmt_inr(amount: Any) -> str:
+    try:
+        return f"₹{int(amount):,}"
+    except (TypeError, ValueError):
+        return "—"
 
 
 def sync_with_backend(api_url: str) -> None:
@@ -116,6 +226,8 @@ def start_trip(
     rooms_required: int,
     stay_preference: str,
 ) -> None:
+    _archive_current_trip_if_done()
+
     # Clear prior trip UI state before a new planning attempt
     st.session_state.trip_status = "idle"
     st.session_state.approval_payload = None
@@ -123,6 +235,7 @@ def start_trip(
     st.session_state.error_message = None
     st.session_state.selected_stay = None
     st.session_state.last_response = None
+    st.session_state.viewing_archived = False
 
     thread_id = f"streamlit_{uuid.uuid4().hex[:12]}"
     preferences = {}
@@ -223,6 +336,7 @@ def _apply_response(data: dict[str, Any]) -> None:
         st.session_state.trip_result = data.get("result")
         hotels = (st.session_state.trip_result or {}).get("hotels", {})
         st.session_state.selected_stay = hotels.get("selected_hotel")
+        st.session_state.viewing_archived = False
     elif status == "rejected":
         st.session_state.approval_payload = None
         st.session_state.trip_result = data.get("state")
@@ -232,6 +346,7 @@ def _apply_response(data: dict[str, Any]) -> None:
 
 
 def reset_trip() -> None:
+    _archive_current_trip_if_done()
     st.session_state.thread_id = None
     st.session_state.trip_status = "idle"
     st.session_state.last_response = None
@@ -239,6 +354,7 @@ def reset_trip() -> None:
     st.session_state.trip_result = None
     st.session_state.error_message = None
     st.session_state.selected_stay = None
+    st.session_state.viewing_archived = False
 
 
 def render_itinerary_structured(itinerary: dict | str | None) -> None:
@@ -256,10 +372,31 @@ def render_itinerary_structured(itinerary: dict | str | None) -> None:
     if itinerary.get("summary"):
         st.info(itinerary["summary"])
 
+    st.markdown(
+        """
+        <style>
+        .itinerary-cost {
+            margin: 0 0 0.2rem 0;
+            font-size: 0.85rem;
+            opacity: 0.75;
+            color: var(--text-color);
+        }
+        .itinerary-label {
+            margin: 0 0 0.35rem 0;
+            color: var(--text-color);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     for day in itinerary.get("days", []):
         with st.expander(f"Day {day.get('day')}: {day.get('title', 'Plan')}", expanded=True):
-            st.caption(f"Estimated cost: ₹{day.get('estimated_cost', 0):,}")
-            st.markdown("**Activities**")
+            st.markdown(
+                f'<p class="itinerary-cost">Estimated cost: ₹{day.get("estimated_cost", 0):,}</p>'
+                f'<p class="itinerary-label"><strong>Activities</strong></p>',
+                unsafe_allow_html=True,
+            )
             for activity in day.get("activities", []):
                 st.markdown(f"- {activity}")
             st.markdown("**Meals**")
@@ -327,19 +464,58 @@ def render_places_structured(places: dict | None) -> None:
         st.write("_No places discovered yet._")
         return
 
-    st.markdown("Explore what's available at your destination.")
+    st.markdown(
+        """
+        <style>
+        .places-card-name {
+            font-size: 0.95rem;
+            font-weight: 600;
+            line-height: 1.3;
+            margin-bottom: 0.35rem;
+            color: var(--text-color);
+        }
+        .places-card-desc {
+            font-size: 0.82rem;
+            line-height: 1.45;
+            opacity: 0.72;
+            color: var(--text-color);
+            margin: 0;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     if places.get("summary"):
         st.caption(places["summary"])
 
-    for label, key in [
-        ("Restaurants", "restaurants"),
-        ("Attractions", "attractions"),
-        ("Hidden Gems", "hidden_gems"),
-    ]:
-        st.markdown(f"#### {label}")
-        for item in places.get(key, []):
-            st.markdown(f"**{item.get('name')}**")
-            st.caption(item.get("description", ""))
+    sections = [
+        ("Restaurants", "restaurants", "Local favourites and must-try meals"),
+        ("Attractions", "attractions", "Landmarks and experiences worth your time"),
+        ("Hidden gems", "hidden_gems", "Quieter spots locals love"),
+    ]
+
+    for idx, (title, key, subtitle) in enumerate(sections):
+        items = places.get(key, [])
+        if not items:
+            continue
+
+        if idx > 0:
+            st.divider()
+
+        st.markdown(f"#### {title}")
+        st.caption(subtitle)
+
+        n = min(len(items), 3)
+        cols = st.columns(n, gap="medium")
+        for col, item in zip(cols, items[:3]):
+            with col:
+                with st.container(border=True):
+                    st.markdown(
+                        f'<p class="places-card-name">{item.get("name", "—")}</p>'
+                        f'<p class="places-card-desc">{item.get("description", "")}</p>',
+                        unsafe_allow_html=True,
+                    )
 
 
 def render_recommendations_structured(
@@ -403,38 +579,297 @@ def render_budget_structured(budget: dict | None) -> None:
         st.info(budget["allocation_rationale"])
 
 
-def render_developer_tools(result: dict) -> None:
-    with st.expander("Developer Tools", expanded=False):
-        prefs = result.get("preferences") or {}
-        if prefs:
-            st.markdown("**Traveler Preferences**")
-            st.json(prefs)
-        st.markdown("**Structured trip data**")
-        st.json(result)
-        if st.session_state.thread_id:
-            st.code(f"thread_id: {st.session_state.thread_id}")
-
-
 def render_header() -> None:
-    st.title("✈️ Travel Planning Assistant")
-    st.caption("Plan your India trip — review your itinerary before we finalize stays and activities.")
+    st.markdown("## DaybyDay")
+    st.markdown(
+        '<p class="ta-tagline">Your itinerary, <span class="ta-tagline-accent">simplified</span>.</p>',
+        unsafe_allow_html=True,
+    )
+
+
+def _inject_app_styles() -> None:
+    st.markdown(
+        """
+        <style>
+        /* Comfortable top spacing — keep content below Streamlit chrome */
+        section.main > div.block-container,
+        [data-testid="stMain"] > div > div.block-container,
+        [data-testid="stMain"] .block-container {
+            padding-top: 2rem;
+            padding-bottom: 1.5rem;
+            max-width: 1100px;
+        }
+        [data-testid="stMain"] h2 {
+            margin-top: 0.25rem;
+            margin-bottom: 0.15rem;
+            padding-top: 0;
+        }
+        [data-testid="stMain"] [data-testid="stCaptionContainer"] {
+            margin-top: 0;
+            margin-bottom: 1rem;
+        }
+
+        /* Evenly spaced trip result tabs */
+        [data-testid="stTabs"] [data-baseweb="tab-list"] {
+            width: 100%;
+            display: flex;
+            gap: 0.35rem;
+        }
+        [data-testid="stTabs"] [data-baseweb="tab"] {
+            flex: 1 1 0;
+            justify-content: center;
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
+        [data-testid="stTabs"] [data-baseweb="tab"] p,
+        [data-testid="stTabs"] [data-baseweb="tab"] div {
+            text-align: center;
+            width: 100%;
+        }
+
+        section[data-testid="stSidebar"] > div {
+            padding-top: 0.35rem;
+        }
+        section[data-testid="stSidebar"] .block-container {
+            padding-top: 0.35rem;
+        }
+        section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div:first-child {
+            padding-top: 0;
+        }
+        section[data-testid="stSidebar"] [data-testid="stImage"] {
+            margin-bottom: 0;
+            margin-top: 0;
+        }
+        section[data-testid="stSidebar"] [data-testid="stImage"] img {
+            border-radius: 8px;
+            display: block;
+        }
+        section[data-testid="stSidebar"] .ta-brand-block {
+            margin-bottom: 0.75rem;
+        }
+        section[data-testid="stSidebar"] [data-testid="column"]:first-child {
+            display: flex;
+            align-items: center;
+        }
+        .ta-brand-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-color);
+            margin: 0;
+            line-height: 1.2;
+        }
+        .ta-tagline {
+            font-size: 0.78rem;
+            letter-spacing: 0.03em;
+            line-height: 1.35;
+            margin: 0.2rem 0 0 0;
+            color: var(--text-color);
+            opacity: 0.7;
+        }
+        .ta-tagline-accent {
+            color: var(--primary-color);
+            font-weight: 600;
+            opacity: 1;
+        }
+        [data-testid="stMain"] .ta-tagline {
+            margin-bottom: 1rem;
+        }
+
+        section[data-testid="stSidebar"] .ta-trip-card {
+            border: 1px solid rgba(128, 128, 128, 0.35);
+            border-radius: 10px;
+            padding: 0.85rem 0.95rem;
+            margin-bottom: 0.75rem;
+            background: var(--secondary-background-color);
+        }
+        section[data-testid="stSidebar"] .ta-plan-new-spacer {
+            height: 0.65rem;
+        }
+        section[data-testid="stSidebar"] .ta-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.35rem;
+        }
+        section[data-testid="stSidebar"] .ta-card-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            opacity: 0.55;
+            color: var(--text-color);
+        }
+        section[data-testid="stSidebar"] .ta-status-pill {
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 0.15rem 0.5rem;
+            border-radius: 999px;
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+        }
+        section[data-testid="stSidebar"] .ta-status-pill.done {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        section[data-testid="stSidebar"] .ta-status-pill.wait {
+            opacity: 0.85;
+        }
+        section[data-testid="stSidebar"] .ta-status-pill.bad {
+            opacity: 0.75;
+        }
+        section[data-testid="stSidebar"] .ta-dest {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-color);
+            margin: 0.15rem 0;
+        }
+        section[data-testid="stSidebar"] .ta-meta {
+            font-size: 0.82rem;
+            opacity: 0.65;
+            color: var(--text-color);
+            margin-bottom: 0.65rem;
+        }
+        section[data-testid="stSidebar"] .ta-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+        section[data-testid="stSidebar"] .ta-m-lbl {
+            font-size: 0.68rem;
+            opacity: 0.55;
+            color: var(--text-color);
+        }
+        section[data-testid="stSidebar"] .ta-m-val {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        section[data-testid="stSidebar"] .ta-sidebar-section {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            opacity: 0.55;
+            color: var(--text-color);
+            margin: 0.85rem 0 0.45rem 0;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_sidebar_brand() -> None:
+    col_logo, col_text = st.columns([1, 3.2], gap="small")
+    with col_logo:
+        if LOGO_PATH.exists():
+            st.image(str(LOGO_PATH), width=48)
+        else:
+            st.markdown("🧳")
+    with col_text:
+        st.markdown('<p class="ta-brand-name">DaybyDay</p>', unsafe_allow_html=True)
+
+
+def _render_sidebar_trip_card() -> None:
+    trip = _sidebar_trip_snapshot()
+    if not trip:
+        return
+
+    status = trip.get("status", "idle")
+    label = _status_label(status)
+    pill_class = "ta-status-pill"
+    if status == "completed":
+        pill_class += " done"
+        label = f"✓ {label}"
+    elif status == "awaiting_approval":
+        pill_class += " wait"
+    elif status in ("rejected", "budget_infeasible", "error"):
+        pill_class += " bad"
+
+    st.markdown(
+        f"""
+        <div class="ta-trip-card">
+            <div class="ta-card-top">
+                <span class="ta-card-label">Current trip</span>
+                <span class="{pill_class}">{label}</span>
+            </div>
+            <div class="ta-dest">{trip.get("destination", "—")}</div>
+            <div class="ta-meta">{trip.get("days", "—")} days · {trip.get("travelers", "—")} travelers</div>
+            <div class="ta-metrics">
+                <div>
+                    <div class="ta-m-lbl">Budget</div>
+                    <div class="ta-m-val">{_fmt_inr(trip.get("budget", 0))}</div>
+                </div>
+                <div>
+                    <div class="ta-m-lbl">Rooms</div>
+                    <div class="ta-m-val">{trip.get("rooms", "—")}</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_sidebar_previous_trips() -> None:
+    trips = st.session_state.previous_trips
+    if not trips:
+        return
+
+    st.markdown('<p class="ta-sidebar-section">Previous trips</p>', unsafe_allow_html=True)
+    for trip in trips:
+        dest = trip.get("destination", "Trip")
+        days = trip.get("days", "—")
+        status = _status_label(trip.get("status", "completed"))
+        btn_label = f"{dest}  ·  {days} days  ·  {status}"
+        if st.button(btn_label, key=f"prev_trip_{trip.get('id')}", use_container_width=True):
+            _load_archived_trip(trip["id"])
+            st.rerun()
+
+
+def _render_sidebar_destinations() -> None:
+    st.markdown('<p class="ta-sidebar-section">Popular destinations</p>', unsafe_allow_html=True)
+    selected = st.session_state.get("destination_input", "Goa")
+
+    for i in range(0, len(SUPPORTED_DESTINATIONS), 2):
+        col1, col2 = st.columns(2)
+        with col1:
+            dest = SUPPORTED_DESTINATIONS[i]
+            if st.button(
+                dest,
+                key=f"sidebar_dest_{dest}",
+                use_container_width=True,
+                type="primary" if selected == dest else "secondary",
+            ):
+                st.session_state.destination_input = dest
+                st.rerun()
+        with col2:
+            if i + 1 < len(SUPPORTED_DESTINATIONS):
+                dest = SUPPORTED_DESTINATIONS[i + 1]
+                if st.button(
+                    dest,
+                    key=f"sidebar_dest_{dest}",
+                    use_container_width=True,
+                    type="primary" if selected == dest else "secondary",
+                ):
+                    st.session_state.destination_input = dest
+                    st.rerun()
 
 
 def render_sidebar(api_url: str) -> str:
     with st.sidebar:
-        st.header("Your trip")
-        if st.session_state.trip_status != "idle":
-            st.text_input("Status", value=st.session_state.trip_status, disabled=True)
-        if st.button("Plan a new trip", use_container_width=True):
+        _render_sidebar_brand()
+        _render_sidebar_trip_card()
+
+        st.markdown('<div class="ta-plan-new-spacer"></div>', unsafe_allow_html=True)
+        if st.button("+ Plan new trip", use_container_width=True, type="primary"):
             reset_trip()
             st.rerun()
+
+        _render_sidebar_previous_trips()
+
         st.divider()
-        st.markdown("**Popular destinations**")
-        st.write(", ".join(SUPPORTED_DESTINATIONS))
-        with st.expander("Developer Tools", expanded=False):
-            st.text_input("API URL", value=api_url, key="dev_api_url")
-            st.text_input("Thread ID", value=st.session_state.thread_id or "—", disabled=True)
-    return st.session_state.get("dev_api_url", api_url)
+        _render_sidebar_destinations()
+
+    return api_url
 
 
 def render_trip_form(api_url: str) -> None:
@@ -444,25 +879,28 @@ def render_trip_form(api_url: str) -> None:
     with col1:
         destination = st.text_input(
             "Destination",
-            value="Goa",
             placeholder="Type a city: Goa, Jaipur, Varkala...",
             help=f"Popular: {', '.join(SUPPORTED_DESTINATIONS)}",
+            key="destination_input",
         ).strip()
         days = st.number_input("Number of days", min_value=1, max_value=30, value=4, step=1)
-        travelers = st.number_input(
-            "People travelling",
-            min_value=1,
-            max_value=20,
-            value=2,
-            help="Total group size. Budget is for the entire group.",
-        )
-        rooms_required = st.number_input(
-            "Rooms required",
-            min_value=1,
-            max_value=10,
-            value=1,
-            help="Number of rooms to book (you choose — not auto-calculated).",
-        )
+        t_col, r_col = st.columns(2)
+        with t_col:
+            travelers = st.number_input(
+                "People travelling",
+                min_value=1,
+                max_value=20,
+                value=2,
+                help="Total group size. Budget is for the entire group.",
+            )
+        with r_col:
+            rooms_required = st.number_input(
+                "Rooms required",
+                min_value=1,
+                max_value=10,
+                value=1,
+                help="Number of rooms to book (you choose — not auto-calculated).",
+            )
 
     with col2:
         budget = st.number_input(
@@ -653,17 +1091,20 @@ def render_completed_results(api_url: str) -> None:
             rooms_required=result.get("rooms_required", 1),
         )
 
-    render_developer_tools(result)
-
 
 def main() -> None:
-    st.set_page_config(page_title="Travel Planning Assistant", page_icon="✈️", layout="wide")
+    st.set_page_config(
+        page_title="DaybyDay",
+        page_icon=str(LOGO_PATH) if LOGO_PATH.exists() else "✈️",
+        layout="wide",
+    )
+    _inject_app_styles()
     init_session_state()
     render_header()
     api_url = render_sidebar(DEFAULT_API_URL)
 
     # Reconcile UI with backend (handles refresh + server restart)
-    if st.session_state.thread_id:
+    if st.session_state.thread_id and not st.session_state.viewing_archived:
         sync_with_backend(api_url)
 
     if st.session_state.error_message:
