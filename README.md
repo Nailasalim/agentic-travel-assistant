@@ -56,7 +56,7 @@ Users describe a trip (destination, days, budget, travelers, stay preference), r
 
 ## Tech stack
 
-Python • LangGraph • LangChain • Groq • FastAPI • MCP • Pydantic • Streamlit
+`Python` `LangGraph` `LangChain` `Groq (Llama 3.3 70B)` `FastAPI` `MCP` `Pydantic` `Streamlit` `Docker`
 
 ---
 
@@ -83,7 +83,7 @@ travel-assistant-ai/
 ## Installation
 
 ```powershell
-git clone https://github.com/Nailasalim/agentic-travel-assistant.git
+git clone https://github.com/<your-username>/travel-assistant-ai.git
 cd travel-assistant-ai
 python -m venv venv
 .\venv\Scripts\Activate.ps1
@@ -169,39 +169,14 @@ Covers HITL approve/modify/reject paths, budget recalculation on stay switching,
 
 ---
 
-## Current Status
+## What's next
 
-✅ Multi-agent workflow
-
-✅ Human-in-the-loop approval
-
-✅ MCP integration
-
-✅ Structured outputs
-
-✅ FastAPI backend
-
-✅ Streamlit frontend
-
-✅ Budget validation
-
-✅ Stay switching
-
-🚧 Docker containerization
-
-🚧 Cloud deployment
-
----
-
-## Future Improvements
-
-* Docker containerization for one-command deployment
-* AWS deployment (EC2/App Runner/ECS)
-* Real travel APIs (hotels, flights, activities)
-* Additional MCP tools (weather, events, transport)
-* Persistent checkpointing with PostgreSQL/Redis
-* Expanded destination coverage
-* Greater workflow automation with reduced manual approvals
+- [ ] **Docker** — containerize the FastAPI backend + Streamlit frontend for one-command, deployment-ready execution
+- [ ] **Real API integrations** — replace curated datasets with live hotel and places APIs
+- [ ] **Weather MCP** — add a weather tool server so itineraries adapt to forecasted conditions
+- [ ] **Full automation** — reduce manual HITL touchpoints for low-risk trip configurations, keeping approval only where budget or preference conflicts arise
+- [ ] **Persistent checkpointer** (Postgres/Redis) — survive server restarts, currently in-memory only
+- [ ] **Cloud deployment** — container orchestration, secrets management, observability
 
 ---
 
@@ -217,8 +192,5 @@ Add your license here (e.g. MIT).
 
 ## Author
 
-Naila Salim
-
-* GitHub: https://github.com/Nailasalim
-* LinkedIn: https://www.linkedin.com/in/nailansalim/
+Add your name and contact links here.
 
