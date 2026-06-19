@@ -1,3 +1,5 @@
+from langgraph.types import Command
+
 from graph.travel_graph import app
 
 config = {
@@ -6,11 +8,13 @@ config = {
     }
 }
 
-result1 = app.invoke(
+app.invoke(
     {
         "destination": "Goa",
         "days": 4,
         "budget": 30000,
+        "travelers": 2,
+        "rooms_required": 1,
         "preferences": {
             "hotel_type": "Beach Resort"
         }
@@ -18,10 +22,13 @@ result1 = app.invoke(
     config=config
 )
 
+app.invoke(Command(resume={"action": "approve", "feedback": ""}), config=config)
+result1 = app.get_state(config).values
+
 print("FIRST RUN")
 print(result1)
 
-result2 = app.invoke(
+app.invoke(
     {
         "destination": "Goa",
         "days": 3,
@@ -29,6 +36,9 @@ result2 = app.invoke(
     },
     config=config
 )
+
+app.invoke(Command(resume={"action": "approve", "feedback": ""}), config=config)
+result2 = app.get_state(config).values
 
 print("\nSECOND RUN")
 print(result2)
