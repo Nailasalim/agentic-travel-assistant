@@ -56,7 +56,7 @@ Users describe a trip (destination, days, budget, travelers, stay preference), r
 
 ## Tech stack
 
-`Python` `LangGraph` `LangChain` `Groq (Llama 3.3 70B)` `FastAPI` `MCP` `Pydantic` `Streamlit` `Docker`
+`Python` `LangGraph` `LangChain` `Groq (Llama 3.3 70B)` `FastAPI` `MCP` `Pydantic` `Streamlit`
 
 ---
 
@@ -64,17 +64,81 @@ Users describe a trip (destination, days, budget, travelers, stay preference), r
 
 ```
 travel-assistant-ai/
-├── agents/          # LangGraph node implementations
-├── api/             # FastAPI app
-├── data/            # Destination, hotel, places datasets
-├── frontend/        # Streamlit UI
-├── graph/           # LangGraph workflow + state
-├── mcp_server/       # MCP tool servers (hotels, places)
-├── memory/          # Checkpointer + preference store
-├── models/          # Pydantic schemas
-├── tools/           # MCP clients
-├── tests/
+├── agents/                          # LangGraph agent nodes
+│   ├── memory.py                    # Load/persist user preferences per thread
+│   ├── places.py                    # Fetch restaurants, attractions, hidden gems
+│   ├── budget_validation.py         # Early budget feasibility gate
+│   ├── planner.py                   # Multi-day itinerary generation (Groq LLM)
+│   ├── approval.py                  # HITL interrupt — approve / modify / reject
+│   ├── hotel.py                     # Stay recommendations via Hotel MCP
+│   ├── budget.py                    # Post-stay budget allocation
+│   └── recommendation.py            # Ranked experience suggestions
+│
+├── api/                             # FastAPI REST layer
+│   ├── main.py                      # /plan-trip, /resume, /select-stay, /status
+│   └── serializers.py               # Request and response models
+│
+├── data/                            # Static destination datasets
+│   ├── destinations.py              # Supported cities and pricing metadata
+│   ├── places.py                    # Restaurants, attractions, hidden gems
+│   └── hotels.py                    # Stay listings by destination
+│
+├── docs/
+│   └── screenshot_agentic/          # README demo screenshots and workflow diagram
+│
+├── frontend/                        # Streamlit UI
+│   ├── streamlit_app.py             # Trip form, HITL flow, trip history, tabs
+│   ├── assets/
+│   │   └── daybyday_logo.png
+│   └── requirements.txt
+│
+├── graph/                           # LangGraph workflow definition
+│   ├── travel_graph.py              # Graph nodes, edges, and conditional routing
+│   └── state.py                     # TravelState schema
+│
+├── mcp_server/                      # MCP tool servers
+│   ├── hotel_server.py              # Stay search and pricing tools
+│   └── places_server.py             # Places discovery tools
+│
+├── memory/                          # Session persistence
+│   ├── store.py                     # MemorySaver checkpointer setup
+│   └── preferences.py               # Per-thread user preference store
+│
+├── models/
+│   └── schemas.py                   # Pydantic schemas for structured LLM outputs
+│
+├── services/
+│   └── trip_update.py               # Stay switching and budget recalculation
+│
+├── tools/                           # MCP client integrations
+│   ├── mcp_client.py                # Shared MCP client utilities
+│   ├── hotel_client.py              # Hotel MCP client
+│   ├── places_client.py             # Places MCP client
+│   └── mcp_config.py                # MCP server configuration
+│
+├── utils/                           # Shared helpers
+│   ├── coercion.py                  # Type coercion for agent outputs
+│   ├── display.py                   # UI formatting helpers
+│   ├── stay.py                      # Stay cost and selection logic
+│   ├── state_helpers.py             # Graph state accessors
+│   └── structured_output.py         # LLM structured output utilities
+│
+├── scripts/                         # Optional dev smoke scripts
+│   ├── test.py
+│   ├── test_groq.py
+│   ├── test_mcp.py
+│   └── test_memory.py
+│
+├── tests/                           # Regression tests
+│   ├── test_hitl.py                 # HITL approve / modify / reject flows
+│   ├── test_budget.py               # Budget allocation and stay switching
+│   ├── test_budget_infeasible_then_valid.py
+│   ├── test_destinations.py         # Destination and MCP data coverage
+│   └── test_schema_and_feasibility.py
+│
 ├── Dockerfile
+├── .dockerignore
+├── .gitignore
 └── README.md
 ```
 
@@ -83,8 +147,8 @@ travel-assistant-ai/
 ## Installation
 
 ```powershell
-git clone https://github.com/<your-username>/travel-assistant-ai.git
-cd travel-assistant-ai
+git clone https://github.com/Nailasalim/agentic-travel-assistant.git
+cd agentic-travel-assistant
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 
@@ -192,5 +256,8 @@ Add your license here (e.g. MIT).
 
 ## Author
 
-Add your name and contact links here.
+**Naila Salim**
+
+* GitHub: [Nailasalim](https://github.com/Nailasalim)
+* LinkedIn: [nailansalim](https://www.linkedin.com/in/nailansalim/)
 
