@@ -252,7 +252,7 @@ LangGraph (multi-agent orchestration, conditional routing, checkpointing) · Hum
 
 ## License
 
-Add your license here (e.g. MIT).
+This project is licensed under the MIT License. See the LICENSE file for details.
 
 ## Author
 
