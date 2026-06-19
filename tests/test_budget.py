@@ -1,5 +1,10 @@
 """Verify budget consistency with hotel selection."""
+import sys
+from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 from agents.budget import budget_agent
 from services.trip_update import apply_stay_selection
 from utils.stay import compute_stay_total, select_stay_option

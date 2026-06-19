@@ -4,6 +4,12 @@ Human-in-the-Loop (HITL) test script for the travel planning graph.
 Demonstrates LangGraph interrupt + Command(resume=...) with MemorySaver.
 """
 import uuid
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from langgraph.types import Command
 

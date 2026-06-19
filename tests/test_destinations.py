@@ -1,5 +1,10 @@
 """Quick tests for destination-aware MCP servers."""
+import sys
+from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 from data.destinations import get_hotels_for_destination, normalize_destination
 from tools.hotel_client import get_hotels
 from tools.places_client import get_places
