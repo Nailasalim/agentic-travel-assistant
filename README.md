@@ -28,28 +28,7 @@ Users describe a trip (destination, days, budget, travelers, stay preference), r
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    START([Start]) --> Memory[Memory Agent]
-    Memory --> Places[Places Agent]
-    Places --> BudgetVal[Budget Validation]
-
-    BudgetVal -->|Feasible| Planner[Planner Agent]
-    BudgetVal -->|Infeasible| END1([END])
-
-    Planner --> Approval[Approval Agent<br/>HITL interrupt]
-
-    Approval -->|Approve| Hotel[Hotel Agent]
-    Approval -->|Modify| Planner
-    Approval -->|Reject| END2([END])
-
-    Hotel --> Budget[Budget Agent]
-    Budget --> Rec[Recommendation Agent]
-    Rec --> END3([END])
-
-    style Approval fill:#1e3a5f,stroke:#60a5fa,color:#fff
-    style BudgetVal fill:#3b2f2f,stroke:#f87171,color:#fff
-```
+![DaybyDay multi-agent workflow](docs/screenshot_agentic/travel_assistant_workflow.png)
 
 | Agent | Responsibility |
 |-------|----------------|
@@ -212,3 +191,4 @@ Add your license here (e.g. MIT).
 ## Author
 
 Add your name and contact links here.
+
