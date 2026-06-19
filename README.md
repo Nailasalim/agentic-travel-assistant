@@ -28,7 +28,9 @@ Users describe a trip (destination, days, budget, travelers, stay preference), r
 
 ## Architecture
 
-![DaybyDay multi-agent workflow](docs/screenshot_agentic/travel_assistant_workflow.png)
+<p align="center">
+  <img src="docs/screenshot_agentic/travel_assistant_workflow.png" width="700"/>
+</p>
 
 | Agent | Responsibility |
 |-------|----------------|
@@ -54,7 +56,7 @@ Users describe a trip (destination, days, budget, travelers, stay preference), r
 
 ## Tech stack
 
-`Python` `LangGraph` `LangChain` `Groq (Llama 3.3 70B)` `FastAPI` `MCP` `Pydantic` `Streamlit` `Docker`
+Python • LangGraph • LangChain • Groq • FastAPI • MCP • Pydantic • Streamlit
 
 ---
 
@@ -81,7 +83,7 @@ travel-assistant-ai/
 ## Installation
 
 ```powershell
-git clone https://github.com/<your-username>/travel-assistant-ai.git
+git clone https://github.com/Nailasalim/agentic-travel-assistant.git
 cd travel-assistant-ai
 python -m venv venv
 .\venv\Scripts\Activate.ps1
@@ -167,14 +169,39 @@ Covers HITL approve/modify/reject paths, budget recalculation on stay switching,
 
 ---
 
-## What's next
+## Current Status
 
-- [ ] **Docker** — containerize the FastAPI backend + Streamlit frontend for one-command, deployment-ready execution
-- [ ] **Real API integrations** — replace curated datasets with live hotel and places APIs
-- [ ] **Weather MCP** — add a weather tool server so itineraries adapt to forecasted conditions
-- [ ] **Full automation** — reduce manual HITL touchpoints for low-risk trip configurations, keeping approval only where budget or preference conflicts arise
-- [ ] **Persistent checkpointer** (Postgres/Redis) — survive server restarts, currently in-memory only
-- [ ] **Cloud deployment** — container orchestration, secrets management, observability
+✅ Multi-agent workflow
+
+✅ Human-in-the-loop approval
+
+✅ MCP integration
+
+✅ Structured outputs
+
+✅ FastAPI backend
+
+✅ Streamlit frontend
+
+✅ Budget validation
+
+✅ Stay switching
+
+🚧 Docker containerization
+
+🚧 Cloud deployment
+
+---
+
+## Future Improvements
+
+* Docker containerization for one-command deployment
+* AWS deployment (EC2/App Runner/ECS)
+* Real travel APIs (hotels, flights, activities)
+* Additional MCP tools (weather, events, transport)
+* Persistent checkpointing with PostgreSQL/Redis
+* Expanded destination coverage
+* Greater workflow automation with reduced manual approvals
 
 ---
 
@@ -190,5 +217,8 @@ Add your license here (e.g. MIT).
 
 ## Author
 
-Add your name and contact links here.
+Naila Salim
+
+* GitHub: https://github.com/Nailasalim
+* LinkedIn: https://www.linkedin.com/in/nailansalim/
 
